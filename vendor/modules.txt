@@ -1,0 +1,10 @@
+# github.com/gorilla/mux v1.8.0
+## explicit
+github.com/gorilla/mux
+# github.com/rs/cors v1.7.0
+## explicit
+github.com/rs/cors
+# golang.org/x/net v0.0.0-20201224014010-6772e930b67b
+## explicit
+# golang.org/x/sys v0.0.0-20210108172913-0df2131ae363
+## explicit
