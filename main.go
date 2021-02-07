@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	f "appbackend/filters"
+	i "appbackend/info"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -12,7 +13,7 @@ import (
 func handleRequests() {
 	router := mux.NewRouter()
 	router.HandleFunc("/readfilterparams", f.ReadFilterParams).Methods("POST")
-	// router.HandleFunc("/pingerfilter", f.PingerFilter).Methods("POST")
+	router.HandleFunc("/networkinfo", i.GetSystemInfo).Methods("GET")
 
 	http.Handle("/", router)
 	handler := cors.Default().Handler(router)
