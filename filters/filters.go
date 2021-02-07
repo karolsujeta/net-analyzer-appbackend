@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Filter reprezentuje strukturę parametrów filtra
@@ -22,16 +25,16 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 	name := r.PostFormValue("name")
 	ip := r.PostFormValue("ip")
 	port := r.PostFormValue("port")
+	protocole := r.PostFormValue("protocole")
+	networkInterface := r.PostFormValue("interface")
 	amount := r.PostFormValue("amount")
-
-	fmt.Println("NAZWA FILTRA:", name, ", IP:", ip, ", PORT:", port, ", ILOŚĆ POMIARÓW:", amount)
 
 	switch name {
 	case "trafficFilter":
-		fmt.Println("Włączam `trafficFilter'")
-		trafficResults, err := trafficFilter(name, amount)
+
+		trafficResults, err := trafficFilter(name, amount, networkInterface)
 		if err != nil {
-			fmt.Println("Wystąpił błąd przy generowaniu wyników", err)
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
 			return
 		}
 
@@ -40,11 +43,9 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(wrapper)
 
 	case "pingerFilter":
-		fmt.Println("Włączam 'pingerFilter'")
-
 		pingerResults, err := pingerFilter(name, ip, amount)
 		if err != nil {
-			fmt.Println("Wystąpił błąd przy generowaniu wyników", err)
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
 			return
 		}
 
@@ -53,10 +54,9 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(wrapper)
 
 	case "tcpFilter":
-		fmt.Println("Włączam 'tcpFilter'")
-		tcpResults, err := tcpFilter(name, port, amount)
+		tcpResults, err := tcpFilter(name, port, amount, networkInterface, protocole)
 		if err != nil {
-			fmt.Println("Wystąpił błąd przy generowaniu wyników", err)
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
 			return
 		}
 
@@ -65,10 +65,9 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(wrapper)
 
 	case "ipFilter":
-		fmt.Println("Włączam 'ipFilter'")
-		ipResults, err := ipFilter(name, ip, amount)
+		ipResults, err := ipFilter(name, ip, amount, networkInterface)
 		if err != nil {
-			fmt.Println("Wystąpił błąd przy generowaniu wyników", err)
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
 			return
 		}
 
@@ -79,71 +78,102 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 }
 
 // Funkcja wykonuje polecenie 'tshark', które śledzi ogólny ruch w sieci
-// Użytkownik podaje również ilość pomiarów do wykonania
-func trafficFilter(name string, amount string) (string, error) {
-	argument := "-c" + amount
+// Użytkownik podaje ilość pomiarów do wykonania
+func trafficFilter(name string, amount string, networkInterface string) (string, error) {
+	log.WithFields(log.Fields{
+		"ILOŚĆ POMIARÓW":      amount,
+		"SKANOWANY INTERFEJS": networkInterface,
+		"NAZWA FILTRA":        name,
+	}).Info()
 
-	cmd := exec.Command("E:/Wireshark/tshark", argument)
+	cmd := exec.Command("tshark", "-i", networkInterface, "-c", amount)
 	cmdOutput, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Niepowodzenie podczas uruchomienia komendy 'tshark'", err)
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'tshark'", err)
 		return "", err
 	}
 
-	fmt.Println("Wynik komendy 'tshark", string(cmdOutput))
 	return string(cmdOutput), nil
 }
 
 // Funkcja wykonuje polecenie 'ping' na adres wskazany przez użytkownika
 // Użytkownik podaje rownież ilość serii pomiarowych
 func pingerFilter(name string, ip string, amount string) ([]string, error) {
+	log.WithFields(log.Fields{
+		"ILOŚĆ POMIARÓW": amount,
+		"ADRES IP":       ip,
+		"NAZWA FILTRA":   name,
+	}).Info()
+
+	var results []string
+
 	amountInt, err := strconv.Atoi(amount)
 	if err != nil {
-		fmt.Println("Wystąpił błąd podczas konwersji ze string na int")
+		log.Error("Wystąpił błąd podczas konwersji ze string na int")
 		return nil, err
 	}
 
-	var results []string
+	saveTxt, err := os.Create("pinger_results.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer saveTxt.Close()
+
 	for i := 0; i < amountInt; i++ {
 		cmd, err := exec.Command("ping", ip).Output()
 		if err != nil {
-			fmt.Println("Niepowodzenie podczas uruchomienia komendy 'ping'")
+			log.Error("Niepowodzenie podczas uruchomienia komendy 'ping'")
 			return nil, err
 		}
-		fmt.Println("Wynik komendy 'ping'", string(cmd))
+		// fmt.Println("Wynik komendy 'ping'", string(cmd))
 		results = append(results, string(cmd))
+		saveTxt.WriteString(string(cmd))
+		if err != nil {
+			fmt.Println(err)
+			saveTxt.Close()
+			return nil, err
+		}
 	}
 	return results, nil
 }
 
 // Funkcja wykonuje polecenie 'tcp.port'
 // Użytkownik podaje port, którego ruch chce śledzić oraz liczbę pomiarów do wykonania
-func tcpFilter(name string, port string, amount string) (string, error) {
-	argument := "-d tcp.port==" + port + " http -c" + amount
+func tcpFilter(name string, port string, amount string, networkInterface string, protocole string) (string, error) {
+	log.WithFields(log.Fields{
+		"ILOŚĆ POMIARÓW":      amount,
+		"PROTOKÓŁ":            protocole,
+		"PORT":                port,
+		"SKANOWANY INTERFEJS": networkInterface,
+		"NAZWA FILTRA":        name,
+	}).Info()
 
-	cmd := exec.Command("E:/Wireshark/tshark", argument)
+	cmd := exec.Command("tshark", "-i", networkInterface, "-d", "tcp.port=="+port+","+protocole, "-c", amount)
 	cmdOutput, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Niepowodzenie podczas uruchomienia komendy 'tcp.port'")
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'tcp.port'")
 		return "", err
 	}
 
-	fmt.Println("Wynik komendy 'tcp.port", string(cmdOutput))
 	return string(cmdOutput), nil
 }
 
 // Funkcja wykonuje polecenie 'tshark', które śledzi śledzi ogólny ruch w sieci
 // Użytkownik podaje adres IP, którego ruch chce śledzić oraz liczbę pomiarów do wykonania
-func ipFilter(name string, ip string, amount string) (string, error) {
-	argument := "-c" + amount + " host " + ip
+func ipFilter(name string, ip string, amount string, networkInterface string) (string, error) {
+	log.WithFields(log.Fields{
+		"ILOŚĆ POMIARÓW":      amount,
+		"IP":                  ip,
+		"SKANOWANY INTERFEJS": networkInterface,
+		"NAZWA FILTRA":        name,
+	}).Info()
 
-	cmd := exec.Command("E:/Wireshark/tshark", argument)
+	cmd := exec.Command("tshark", "-i", networkInterface, "-c", amount, "host", ip)
 	cmdOutput, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Niepowodzenie podczas uruchomienia komendy 'tshark'")
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'tshark'")
 		return "", err
 	}
 
-	fmt.Println("Wynik komendy 'tshark'", string(cmdOutput))
 	return string(cmdOutput), nil
 }
