@@ -50,7 +50,7 @@ func readSystemInfo() (string, error) {
 func nmapInfo() (string, error) {
 	argument := "192.168.0.1"
 
-	cmd, err := exec.Command("C:/Program Files (x86)/Nmap/nmap", argument).Output()
+	cmd, err := exec.Command("nmap", argument).Output()
 	if err != nil {
 		return "", err
 	}
