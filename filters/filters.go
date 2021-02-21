@@ -74,7 +74,63 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 		payload := map[string]interface{}{"ipResults": ipResults}
 		wrapper := c.NewPayloadWrapper(0, payload)
 		json.NewEncoder(w).Encode(wrapper)
+
+	case "addressPorts":
+		addressResults, err := addressPortsFilter(ip)
+		if err != nil {
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
+			return
+		}
+
+		payload := map[string]interface{}{"addressPortsResults": addressResults}
+		wrapper := c.NewPayloadWrapper(0, payload)
+		json.NewEncoder(w).Encode(wrapper)
+
+	case "connectedDevicesPorts":
+		connectedDevicesResults, err := connectedDevicesPortsFilter()
+		if err != nil {
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
+			return
+		}
+
+		payload := map[string]interface{}{"connectedDevicesPortsResults": connectedDevicesResults}
+		wrapper := c.NewPayloadWrapper(0, payload)
+		json.NewEncoder(w).Encode(wrapper)
+
+	case "traceRoute":
+		traceRouteResults, err := traceRouteFilter(ip)
+		if err != nil {
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
+			return
+		}
+
+		payload := map[string]interface{}{"traceRouteResults": traceRouteResults}
+		wrapper := c.NewPayloadWrapper(0, payload)
+		json.NewEncoder(w).Encode(wrapper)
+
+	case "topPortsBasic":
+		topPortsBasicResults, err := topPortsBasicFilter(ip, amount)
+		if err != nil {
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
+			return
+		}
+
+		payload := map[string]interface{}{"topPortsBasicResults": topPortsBasicResults}
+		wrapper := c.NewPayloadWrapper(0, payload)
+		json.NewEncoder(w).Encode(wrapper)
+
+	case "topPortsAdvanced":
+		topPortsAdvancedResults, err := topPortsAdvancedFilter(ip, amount)
+		if err != nil {
+			log.Error("Wystąpił błąd przy generowaniu wyników", err)
+			return
+		}
+
+		payload := map[string]interface{}{"topPortsAdvancedResults": topPortsAdvancedResults}
+		wrapper := c.NewPayloadWrapper(0, payload)
+		json.NewEncoder(w).Encode(wrapper)
 	}
+
 }
 
 // Funkcja wykonuje polecenie 'tshark', które śledzi ogólny ruch w sieci
@@ -176,4 +232,64 @@ func ipFilter(name string, ip string, amount string, networkInterface string) (s
 	}
 
 	return string(cmdOutput), nil
+}
+
+func addressPortsFilter(ip string) (string, error) {
+	log.Info("IP/HOST:", ip)
+
+	cmd, err := exec.Command("nmap", ip).Output()
+	if err != nil {
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
+		return "", err
+	}
+
+	return string(cmd), nil
+}
+
+func connectedDevicesPortsFilter() (string, error) {
+	log.Info("Connected devices ports filter enabled")
+
+	cmd, err := exec.Command("nmap", "-sV", "-p", "22,443", "192.168.0.0/24", "-open").Output()
+	if err != nil {
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
+		return "", err
+	}
+
+	return string(cmd), nil
+}
+
+func traceRouteFilter(ip string) (string, error) {
+	log.Info("IP/HOST:", ip)
+
+	cmd, err := exec.Command("nmap", "-vv", "-n", "-sn", "-PE", "-T4", "--packet-trace", ip).Output()
+	if err != nil {
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
+		return "", err
+	}
+
+	return string(cmd), nil
+}
+
+func topPortsBasicFilter(ip string, amount string) (string, error) {
+	log.Info("Top ", amount, " ports for ", ip, " with basic params enabled")
+
+	cmd, err := exec.Command("nmap", "--top-ports", amount, ip).Output()
+	if err != nil {
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
+		return "", err
+	}
+
+	return string(cmd), nil
+}
+
+func topPortsAdvancedFilter(ip string, amount string) (string, error) {
+	log.Info("Top ", amount, " ports for ", ip, " with advanced params enabled")
+
+	cmd, err := exec.Command("nmap", "-vv", "-O", "-P0", "-sTUV", "--top-ports", amount, ip).Output()
+	if err != nil {
+		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
+		return "", err
+	}
+
+	return string(cmd), nil
 }
