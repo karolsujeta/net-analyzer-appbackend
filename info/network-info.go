@@ -58,7 +58,7 @@ func nmapInfo() (string, error) {
 	return string(cmd), nil
 }
 
-// Funkcja zwraca wszystkie znalezione interfejsy sieciowe
+// Funkcja zwraca dostępne interfejsy sieciowe
 func findAllInterfaces() (string, error) {
 	cmd, err := exec.Command("tshark", "--list-interfaces").Output()
 	if err != nil {
