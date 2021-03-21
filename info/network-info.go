@@ -48,7 +48,7 @@ func readSystemInfo() (string, error) {
 
 // Funkja wykonuje komendę 'nmap' na wybrany host
 func nmapInfo() (string, error) {
-	argument := "192.168.0.1"
+	argument := "192.168.1.1"
 
 	cmd, err := exec.Command("nmap", argument).Output()
 	if err != nil {

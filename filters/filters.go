@@ -5,26 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
 )
 
-// Filter reprezentuje strukturę parametrów filtra
-type Filter struct {
-	Name   string `json:"name"`
-	IP     string `json:"ip"`
-	Port   string `json:"port"`
-	Amount string `json:"amount"`
-}
-
 // ReadFilterParams odczytuje rodzaj filtru wybranego przez użytkownika oraz niezbędne parametry
 func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 	name := r.PostFormValue("name")
 	ip := r.PostFormValue("ip")
-	port := r.PostFormValue("port")
 	protocole := r.PostFormValue("protocole")
 	networkInterface := r.PostFormValue("interface")
 	amount := r.PostFormValue("amount")
@@ -53,14 +43,14 @@ func ReadFilterParams(w http.ResponseWriter, r *http.Request) {
 		wrapper := c.NewPayloadWrapper(0, payload)
 		json.NewEncoder(w).Encode(wrapper)
 
-	case "tcpFilter":
-		tcpResults, err := tcpFilter(name, port, amount, networkInterface, protocole)
+	case "protocoleFilter":
+		protocoleResults, err := protocoleFilter(name, amount, networkInterface, protocole)
 		if err != nil {
 			log.Error("Wystąpił błąd przy generowaniu wyników", err)
 			return
 		}
 
-		payload := map[string]interface{}{"tcpResults": tcpResults}
+		payload := map[string]interface{}{"protocoleResults": protocoleResults}
 		wrapper := c.NewPayloadWrapper(0, payload)
 		json.NewEncoder(w).Encode(wrapper)
 
@@ -142,7 +132,9 @@ func trafficFilter(name string, amount string, networkInterface string) (string,
 		"NAZWA FILTRA":        name,
 	}).Info()
 
+	// sumArgument:="-z io, stat, 0, SUM(frame.len)frame.len"
 	cmd := exec.Command("tshark", "-i", networkInterface, "-c", amount)
+
 	cmdOutput, err := cmd.Output()
 	if err != nil {
 		log.Error("Niepowodzenie podczas uruchomienia komendy 'tshark'", err)
@@ -169,45 +161,35 @@ func pingerFilter(name string, ip string, amount string) ([]string, error) {
 		return nil, err
 	}
 
-	saveTxt, err := os.Create("pinger_results.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer saveTxt.Close()
-
 	for i := 0; i < amountInt; i++ {
-		cmd, err := exec.Command("ping", ip).Output()
+		cmd, err := exec.Command("HRping", ip).Output()
 		if err != nil {
 			log.Error("Niepowodzenie podczas uruchomienia komendy 'ping'")
 			return nil, err
 		}
-		// fmt.Println("Wynik komendy 'ping'", string(cmd))
 		results = append(results, string(cmd))
-		saveTxt.WriteString(string(cmd))
 		if err != nil {
 			fmt.Println(err)
-			saveTxt.Close()
 			return nil, err
 		}
 	}
 	return results, nil
 }
 
-// Funkcja wykonuje polecenie 'tcp.port'
-// Użytkownik podaje port, którego ruch chce śledzić oraz liczbę pomiarów do wykonania
-func tcpFilter(name string, port string, amount string, networkInterface string, protocole string) (string, error) {
+// Użytkownik podaje protokół, którego ruch chce śledzić oraz liczbę pomiarów do wykonania
+func protocoleFilter(name string, amount string, networkInterface string, protocole string) (string, error) {
 	log.WithFields(log.Fields{
 		"ILOŚĆ POMIARÓW":      amount,
 		"PROTOKÓŁ":            protocole,
-		"PORT":                port,
 		"SKANOWANY INTERFEJS": networkInterface,
 		"NAZWA FILTRA":        name,
 	}).Info()
 
-	cmd := exec.Command("tshark", "-i", networkInterface, "-d", "tcp.port=="+port+","+protocole, "-c", amount)
+	// sumArgument:="-z io, stat, 0, SUM(frame.len)frame.len"
+	cmd := exec.Command("tshark", "-i", networkInterface, "-f", protocole, "-c", amount)
 	cmdOutput, err := cmd.Output()
 	if err != nil {
-		log.Error("Niepowodzenie podczas uruchomienia komendy 'tcp.port'")
+		log.Error("Niepowodzenie podczas uruchomienia komendy")
 		return "", err
 	}
 
@@ -249,7 +231,7 @@ func addressPortsFilter(ip string) (string, error) {
 func connectedDevicesPortsFilter() (string, error) {
 	log.Info("Connected devices ports filter enabled")
 
-	cmd, err := exec.Command("nmap", "-sV", "-p", "22,443", "192.168.0.0/24", "-open").Output()
+	cmd, err := exec.Command("nmap", "-sV", "-p", "22,443", "192.168.1.0/24", "-open").Output()
 	if err != nil {
 		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
 		return "", err
@@ -261,7 +243,7 @@ func connectedDevicesPortsFilter() (string, error) {
 func traceRouteFilter(ip string) (string, error) {
 	log.Info("IP/HOST:", ip)
 
-	cmd, err := exec.Command("nmap", "-vv", "-n", "-sn", "-PE", "-T4", "--packet-trace", ip).Output()
+	cmd, err := exec.Command("nmap", "-sn", "--traceroute ", ip).Output()
 	if err != nil {
 		log.Error("Niepowodzenie podczas uruchomienia komendy 'nmap'")
 		return "", err
